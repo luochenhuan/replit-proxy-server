@@ -1,0 +1,1 @@
+- [Background processes across ShellExec calls](shellexec-background-processes.md) — nohup/setsid/disown don't survive between separate ShellExec invocations; long-running services must be started inside a workflow.
