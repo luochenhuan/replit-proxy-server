@@ -1,0 +1,32 @@
+{
+  "name": "replit-proxy-server",
+  "version": "1.0.0",
+  "description": "OpenAI-compatible LLM proxy with per-user usage metering and admin-configurable limits",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/luochenhuan/replit-proxy-server.git"
+  },
+  "license": "ISC",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "tsx scripts/e2e.ts",
+    "loadtest": "tsx scripts/loadtest.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.10.0",
+    "undici": "^8.7.0"
+  },
+  "devDependencies": {
+    "@types/autocannon": "^7.12.7",
+    "@types/node": "^26.1.1",
+    "autocannon": "^8.0.0",
+    "openai": "^6.46.0",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
