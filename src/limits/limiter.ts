@@ -2,6 +2,16 @@ import type { LimitConfig, LimitDecision, Usage, WindowLimit } from "../types.js
 import type { LimitStore } from "../store/limit-store.js";
 import type { WindowCounterStore } from "../store/window-counter-store.js";
 
+/** Live consumption of one configured window, paired with its caps (for display). */
+export interface WindowUsage {
+  key: "shortTerm" | "longTerm";
+  windowSeconds: number;
+  tokens: number;
+  requests: number;
+  maxTokens?: number;
+  maxRequests?: number;
+}
+
 /**
  * Enforces admin-configured windowed rate limits using staggered fixed-window
  * counters (see window-counter-store.ts). `record` must be called once per
@@ -41,6 +51,32 @@ export class Limiter {
     }
 
     return { allowed: true };
+  }
+
+  /**
+   * Live consumption for each of the user's configured windows, for display
+   * (the usage dashboard's gauges). Reads the same counters `check` enforces
+   * against, so the numbers a user sees match what the limiter uses. Returns
+   * an empty array when the user has no limits configured.
+   */
+  windowUsage(userId: string, now: number = Date.now()): WindowUsage[] {
+    const config = this.limits.get(userId);
+    if (!config) return [];
+    const out: WindowUsage[] = [];
+    for (const key of ["shortTerm", "longTerm"] as const) {
+      const window = config[key];
+      if (!window) continue;
+      const counter = this.windows.peek(userId, key, window.windowSeconds, now);
+      out.push({
+        key,
+        windowSeconds: window.windowSeconds,
+        tokens: counter.tokens,
+        requests: counter.requests,
+        maxTokens: window.maxTokens,
+        maxRequests: window.maxRequests,
+      });
+    }
+    return out;
   }
 
   /**

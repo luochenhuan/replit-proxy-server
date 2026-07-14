@@ -233,6 +233,34 @@ describe("proxy app", () => {
       const blocked = await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
       expect(blocked.statusCode).toBe(429);
     });
+
+    it("reports live window consumption in /v1/usage for the dashboard gauges", async () => {
+      const userId = await userIdOf(USER);
+      await app.inject({
+        method: "PUT",
+        url: `/admin/limits/${userId}`,
+        headers: { ...ADMIN, "content-type": "application/json" },
+        payload: JSON.stringify({
+          shortTerm: { windowSeconds: 60, maxRequests: 10 },
+          longTerm: { windowSeconds: 86400, maxTokens: 100000 },
+        }),
+      });
+
+      // Before any traffic under the limit: windows report zero.
+      let usage = (await app.inject({ method: "GET", url: "/v1/usage", headers: USER })).json();
+      const short0 = usage.window_usage.find((w: { window: string }) => w.window === "shortTerm");
+      expect(short0).toMatchObject({ requests: 0, tokens: 0, max_requests: 10 });
+
+      // Send two requests (30 tokens each).
+      await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
+      await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
+
+      usage = (await app.inject({ method: "GET", url: "/v1/usage", headers: USER })).json();
+      const short = usage.window_usage.find((w: { window: string }) => w.window === "shortTerm");
+      const long = usage.window_usage.find((w: { window: string }) => w.window === "longTerm");
+      expect(short).toMatchObject({ requests: 2, window_seconds: 60 });
+      expect(long).toMatchObject({ tokens: 60, window_seconds: 86400 });
+    });
   });
 
   it("exposes admin usage across users", async () => {

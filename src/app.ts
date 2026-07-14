@@ -81,7 +81,7 @@ export function buildApp(
       );
     }
 
-    registerUsageRoutes(userScope, usageStore, limitStore, historyStore, pricing);
+    registerUsageRoutes(userScope, usageStore, limitStore, historyStore, pricing, limiter);
   });
 
   // --- admin surface (separate auth) ---

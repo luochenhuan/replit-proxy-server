@@ -184,6 +184,18 @@ function timeAgo(iso) {
   return d.toLocaleDateString();
 }
 
+// Render a window length in the largest whole unit (e.g. 300 -> "5m",
+// 86400 -> "24h", 604800 -> "7d"). Falls back to seconds when it doesn't
+// divide evenly, so an odd value like 90s stays exact ("90s") rather than
+// rounding to a misleading "1m".
+function formatDuration(seconds) {
+  const units = [["d", 86400], ["h", 3600], ["m", 60]];
+  for (const [suffix, size] of units) {
+    if (seconds >= size && seconds % size === 0) return seconds / size + suffix;
+  }
+  return seconds + "s";
+}
+
 let token = sessionStorage.getItem("mr_user_token") || "";
 
 async function api(path) {
@@ -209,17 +221,17 @@ function gauge(name, used, cap, unit) {
   </div>`;
 }
 
-function renderGauges(usage, limits) {
+function renderGauges(usage) {
   const box = $("gauges");
-  if (!limits) { $("limitsSection").classList.add("hidden"); box.innerHTML = ""; return; }
+  const windows = usage.window_usage || [];
+  if (!windows.length) { $("limitsSection").classList.add("hidden"); box.innerHTML = ""; return; }
+  const labels = { shortTerm: "Short-term window", longTerm: "Long-term window" };
   const rows = [];
-  // Windowed caps: we can show the cap; live window consumption isn't in the usage
-  // rollup, so these communicate the ceiling and are annotated as per-window.
-  for (const [key, label] of [["shortTerm", "Short-term window"], ["longTerm", "Long-term window"]]) {
-    const w = limits[key];
-    if (!w) continue;
-    if (w.maxTokens) rows.push(gauge(label + " (" + w.windowSeconds + "s)", 0, w.maxTokens, "tokens"));
-    if (w.maxRequests) rows.push(gauge(label + " req (" + w.windowSeconds + "s)", 0, w.maxRequests, "req"));
+  // Live consumption within each window (from window_usage), against its caps.
+  for (const w of windows) {
+    const label = (labels[w.window] || w.window) + " (" + formatDuration(w.window_seconds) + ")";
+    if (w.max_tokens) rows.push(gauge(label, w.tokens, w.max_tokens, "tokens"));
+    if (w.max_requests) rows.push(gauge(label + " req", w.requests, w.max_requests, "req"));
   }
   if (!rows.length) { $("limitsSection").classList.add("hidden"); return; }
   $("limitsSection").classList.remove("hidden");
@@ -269,7 +281,7 @@ async function load() {
   $("rCost").textContent = money(usage.totals.cost_usd);
   $("rModels").textContent = Object.keys(usage.models).length;
   $("rId").textContent = usage.user_id;
-  renderGauges(usage, usage.limits);
+  renderGauges(usage);
   renderModels(usage);
   renderHistory(hist);
   $("stamp").textContent = "updated " + new Date().toLocaleTimeString();

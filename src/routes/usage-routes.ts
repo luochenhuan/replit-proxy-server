@@ -3,6 +3,7 @@ import type { UsageStore } from "../store/usage-store.js";
 import type { LimitStore } from "../store/limit-store.js";
 import type { CallHistoryStore } from "../store/call-history-store.js";
 import type { Pricing } from "../billing/pricing.js";
+import type { Limiter } from "../limits/limiter.js";
 import { buildUsageView } from "../billing/usage-view.js";
 import { serializeCalls } from "./call-serializer.js";
 
@@ -19,11 +20,22 @@ export function registerUsageRoutes(
   limits: LimitStore,
   history: CallHistoryStore,
   pricing: Pricing,
+  limiter: Limiter,
 ): void {
   app.get("/v1/usage", async (req) => {
     const userId = req.userId!;
     const view = buildUsageView(userId, usage, pricing);
-    return { ...view, limits: limits.get(userId) ?? null };
+    // Live consumption within each configured rate-limit window, so the
+    // dashboard gauges reflect actual usage rather than always reading zero.
+    const windows = limiter.windowUsage(userId).map((w) => ({
+      window: w.key,
+      window_seconds: w.windowSeconds,
+      tokens: w.tokens,
+      requests: w.requests,
+      max_tokens: w.maxTokens ?? null,
+      max_requests: w.maxRequests ?? null,
+    }));
+    return { ...view, limits: limits.get(userId) ?? null, window_usage: windows };
   });
 
   app.get("/v1/history", async (req) => {
