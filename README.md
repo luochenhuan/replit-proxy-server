@@ -5,6 +5,41 @@ It sits in front of a local [Ollama](https://ollama.com) server, authenticates u
 
 It ships with two web consoles ("Model Meter"): a developer dashboard to read your own usage, cost, and call history, and an admin dashboard (the "Control room") to watch usage/cost across all users and administer their limits.
 
+## Demo in one minute 
+
+The fastest way to see everything working, with data already populated in both dashboards:
+
+```bash
+# 1. Prerequisites: Node 20+, and Ollama running with the two models pulled
+ollama pull llama3.2:1b && ollama pull moondream
+
+# 2. Install, seed demo data, and start the server
+npm install
+npm run seed         # writes demo users + usage/cost/history into data/meter.db
+npm start            # proxy + dashboards on http://localhost:8000
+```
+
+Then open the dashboards in a browser:
+
+| URL | Console | Sign in with |
+|---|---|---|
+| `http://localhost:8000/` | Landing - pick a console | - |
+| `http://localhost:8000/dashboard` | Developer: usage, cost, call history | a demo API token (below) |
+| `http://localhost:8000/admin/dashboard` | Admin: all users, cost, limits, per-user drill-down | the admin key `admin-secret` |
+
+Demo API tokens created by the seed (any of them works on the developer dashboard):
+
+| Token | Profile |
+|---|---|
+| `demo-alice` | Heavy user, both models, tight rate limits, a rejected call in history |
+| `demo-bob` | Moderate user, no limits |
+| `demo-carol` | Light user, vision (moondream) only |
+
+Notes:
+- `npm run seed` is idempotent and re-runnable; it prints the tokens, admin key, and URLs when it finishes.
+- Any non-empty string works as an API token (identity is derived from it), so you can also send your own traffic - see the OpenAI-SDK example under [Quick start](#quick-start) - and it will appear in the consoles.
+- The admin key defaults to `admin-secret`; override with `ADMIN_API_KEY=... npm start`.
+
 ## Quick start
 
 ```bash
