@@ -15,6 +15,7 @@ build/
 # OS
 .DS_Store
 
+docs/
 CLAUDE.md
 AGENTS.md
 Cloud Services Take-Home Interview Question.md
