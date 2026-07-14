@@ -1,9 +1,7 @@
 # replit-proxy-server
 
 An OpenAI-compatible LLM proxy in TypeScript.
-It sits in front of a local [Ollama](https://ollama.com) server, authenticates users by API token, meters token usage per user per model, prices that usage, and enforces admin-configured usage limits - the billing/limiting control point described in the take-home prompt.
-
-It ships with two web consoles ("Model Meter"): a developer dashboard to read your own usage, cost, and call history, and an admin dashboard (the "Control room") to watch usage/cost across all users and administer their limits.
+It sits in front of a local [Ollama](https://ollama.com) server, authenticates users by API token, meters token usage per user per model, prices that usage, and enforces admin-configured usage limits.
 
 ## Demo in one minute 
 
@@ -39,6 +37,20 @@ Notes:
 - `npm run seed` is idempotent and re-runnable; it prints the tokens, admin key, and URLs when it finishes.
 - Any non-empty string works as an API token (identity is derived from it), so you can also send your own traffic - see the OpenAI-SDK example under [Quick start](#quick-start) - and it will appear in the consoles.
 - The admin key defaults to `admin-secret`; override with `ADMIN_API_KEY=... npm start`.
+
+### Dashboard previews
+
+**Console picker**
+
+![Model Meter console picker](public/screenshots/model-meter-landing.png)
+
+**Developer usage console**
+
+![Model Meter developer usage dashboard](public/screenshots/model-meter-developer.png)
+
+**Admin control console**
+
+![Model Meter admin control dashboard](public/screenshots/model-meter-admin.png)
 
 ## Quick start
 
