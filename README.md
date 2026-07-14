@@ -455,11 +455,6 @@ Dev-only:
 
 The `openai` SDK's client-side retry defaults to `maxRetries: 2` and silently retries 429s with backoff; the e2e suite sets `maxRetries: 0` so a tripped limit surfaces as `RateLimitError` immediately rather than being retried away.
 
-## Bonus feature: the two dashboards
-
-The prompt's bonus asks for one high-value feature and lists, among the ideas, "a UI for admins to view/administer usage and billing for all users" and "a UI for users to see the history of calls they've sent with their associated usage".
-This implements both, plus the pricing and per-call history the "billing" and "history" framings imply.
-See the [Dashboards](#dashboards) section to run them.
 
 ## Deferred (by design)
 
