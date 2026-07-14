@@ -1,15 +1,12 @@
 import type { LimitConfig, LimitDecision, Usage, WindowLimit } from "../types.js";
 import type { LimitStore } from "../store/limit-store.js";
-import type { UsageStore } from "../store/usage-store.js";
 import type { WindowCounterStore } from "../store/window-counter-store.js";
 
 /**
- * Enforces admin-configured limits.
- *
- * Windowed limits use staggered fixed-window counters (see
- * window-counter-store.ts); total limits read the lifetime aggregate from the
- * usage store. `record` must be called once per completed request so the
- * window counters advance — the proxy does this alongside usage recording.
+ * Enforces admin-configured windowed rate limits using staggered fixed-window
+ * counters (see window-counter-store.ts). `record` must be called once per
+ * completed request so the window counters advance — the proxy does this
+ * alongside usage recording.
  *
  * Design decision: limits are checked BEFORE forwarding a request, against
  * usage that has already been recorded. Token counts are only known after a
@@ -22,29 +19,19 @@ import type { WindowCounterStore } from "../store/window-counter-store.js";
  *
  * Request-count limits have no such slack: the Nth+1 request in a window is
  * rejected exactly.
+ *
+ * Limits are windowed only — there is no lifetime/total cap, so a user's usage
+ * is never permanently exhausted; every window recovers as it slides.
  */
 export class Limiter {
   constructor(
     private readonly limits: LimitStore,
-    private readonly usage: UsageStore,
     private readonly windows: WindowCounterStore,
   ) {}
 
   check(userId: string, now: number = Date.now()): LimitDecision {
     const config = this.limits.get(userId);
     if (!config) return { allowed: true };
-
-    if (config.total) {
-      const total = this.usage.totalTokens(userId);
-      if (total >= config.total.maxTokens) {
-        return {
-          allowed: false,
-          limit: "total",
-          reason: `Total usage limit reached (${total}/${config.total.maxTokens} tokens). Contact support to raise your limit.`,
-          retryAfterSeconds: 0,
-        };
-      }
-    }
 
     for (const key of ["shortTerm", "longTerm"] as const) {
       const window = config[key];
@@ -117,18 +104,9 @@ export function validateLimitConfig(raw: unknown): LimitConfig {
     if (obj[key] === undefined || obj[key] === null) continue;
     config[key] = validateWindow(key, obj[key]);
   }
-  if (obj.total !== undefined && obj.total !== null) {
-    const total = obj.total as Record<string, unknown>;
-    if (!isPositiveInt(total.maxTokens)) {
-      throw new LimitValidationError("total.maxTokens must be a positive integer.");
-    }
-    config.total = { maxTokens: total.maxTokens };
-  }
 
-  if (!config.shortTerm && !config.longTerm && !config.total) {
-    throw new LimitValidationError(
-      "At least one of shortTerm, longTerm, or total must be provided.",
-    );
+  if (!config.shortTerm && !config.longTerm) {
+    throw new LimitValidationError("At least one of shortTerm or longTerm must be provided.");
   }
   if (
     config.shortTerm &&

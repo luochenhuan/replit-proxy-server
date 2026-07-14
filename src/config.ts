@@ -19,6 +19,18 @@ export interface Config {
   adminApiKey: string;
   /** Log level for the fastify logger. */
   logLevel: string;
+  /** Storage backend: "memory" (ephemeral) or "sqlite" (durable, file-backed). */
+  storage: "memory" | "sqlite";
+  /** SQLite file path when storage is "sqlite". */
+  dbPath: string;
+}
+
+function storageEnv(env: NodeJS.ProcessEnv): "memory" | "sqlite" {
+  const raw = (env.STORAGE ?? "sqlite").toLowerCase();
+  if (raw !== "memory" && raw !== "sqlite") {
+    throw new Error(`Invalid value for STORAGE: ${raw} (expected "memory" or "sqlite")`);
+  }
+  return raw;
 }
 
 function intEnv(name: string, fallback: number): number {
@@ -41,5 +53,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     serverBodyTimeoutMs: intEnv("SERVER_BODY_TIMEOUT_MS", 300_000),
     adminApiKey: env.ADMIN_API_KEY ?? "admin-secret",
     logLevel: env.LOG_LEVEL ?? "info",
+    storage: storageEnv(env),
+    dbPath: env.DB_PATH ?? "data/meter.db",
   };
 }

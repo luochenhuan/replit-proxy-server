@@ -1,7 +1,7 @@
 /** Token usage for a single completed request. */
 export interface Usage {
-  promptTokens: number;
-  completionTokens: number;
+  inputTokens: number;
+  outputTokens: number;
   totalTokens: number;
 }
 
@@ -20,19 +20,14 @@ export interface WindowLimit {
   maxRequests?: number;
 }
 
-/** Lifetime cap. Once total tokens ever consumed reach this, requests fail. */
-export interface TotalLimit {
-  maxTokens: number;
-}
-
 /**
  * Per-user limit configuration set by admins. All fields optional — absent
- * means unlimited on that axis.
+ * means unlimited on that axis. Limits are windowed (rate limits); there is no
+ * lifetime cap, so usage is never permanently exhausted.
  */
 export interface LimitConfig {
   shortTerm?: WindowLimit;
   longTerm?: WindowLimit;
-  total?: TotalLimit;
 }
 
 /** Result of a pre-request limit check. */
@@ -40,10 +35,10 @@ export type LimitDecision =
   | { allowed: true }
   | {
       allowed: false;
-      /** Which limit tripped, e.g. "shortTerm" | "longTerm" | "total". */
+      /** Which limit tripped: "shortTerm" | "longTerm". */
       limit: keyof LimitConfig;
       /** Human-readable reason surfaced to the client. */
       reason: string;
-      /** Seconds until the caller could plausibly retry (0 = never, for total). */
+      /** Seconds until the caller could retry. */
       retryAfterSeconds: number;
     };

@@ -5,13 +5,13 @@ describe("usageFromJson", () => {
   it("extracts usage from a completion response", () => {
     expect(
       usageFromJson({ usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 } }),
-    ).toEqual({ promptTokens: 10, completionTokens: 20, totalTokens: 30 });
+    ).toEqual({ inputTokens: 10, outputTokens: 20, totalTokens: 30 });
   });
 
   it("computes total when missing", () => {
     expect(usageFromJson({ usage: { prompt_tokens: 5, completion_tokens: 7 } })).toEqual({
-      promptTokens: 5,
-      completionTokens: 7,
+      inputTokens: 5,
+      outputTokens: 7,
       totalTokens: 12,
     });
   });
@@ -34,7 +34,7 @@ describe("SseUsageScanner", () => {
     scanner.feed('data: {"choices":[{"delta":{"content":"hi"}}]}\n\n');
     scanner.feed(`data: ${usageChunk}\n\n`);
     scanner.feed("data: [DONE]\n\n");
-    expect(scanner.usage()).toEqual({ promptTokens: 11, completionTokens: 22, totalTokens: 33 });
+    expect(scanner.usage()).toEqual({ inputTokens: 11, outputTokens: 22, totalTokens: 33 });
   });
 
   it("handles events split across arbitrary chunk boundaries", () => {
@@ -42,7 +42,7 @@ describe("SseUsageScanner", () => {
     const event = `data: ${usageChunk}\n\ndata: [DONE]\n\n`;
     // Feed one byte at a time — worst-case fragmentation.
     for (const ch of event) scanner.feed(ch);
-    expect(scanner.usage()).toEqual({ promptTokens: 11, completionTokens: 22, totalTokens: 33 });
+    expect(scanner.usage()).toEqual({ inputTokens: 11, outputTokens: 22, totalTokens: 33 });
   });
 
   it("returns undefined when no usage chunk ever arrives", () => {

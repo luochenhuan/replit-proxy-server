@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Replit Model Meter Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0E141B; --panel: #18212C; --panel-2: #202B38; --line: #2C3946;
+    --text: #E6EDF3; --muted: #8296A8;
+    --signal: #4CD4B0; --warn: #F5B14C; --over: #FF6B6B;
+    --replit: #FF3C00;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: "Inter", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--ink); color: var(--text);
+    font-family: var(--sans); -webkit-font-smoothing: antialiased;
+    display: grid; place-items: center; padding: 24px;
+    background-image: radial-gradient(circle at 50% 0%, #1a2735 0%, var(--ink) 60%);
+  }
+  .console { width: 100%; max-width: 640px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.28em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 16px;
+  }
+  h1 {
+    font-family: var(--mono); font-weight: 700; font-size: clamp(38px, 8vw, 68px);
+    line-height: 0.98; letter-spacing: -0.02em; margin: 0 0 8px; color: var(--text);
+  }
+  h1 .replit { color: var(--replit); }
+  .lede { color: var(--muted); font-size: 17px; line-height: 1.5; max-width: 52ch; text-wrap: balance; margin: 0 0 6px; }
+  .lede-cta { color: var(--text); font-size: 17px; line-height: 1.5; margin: 0 0 40px; }
+  .doors { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 520px) { .doors { grid-template-columns: 1fr; } }
+  .door {
+    display: block; text-decoration: none; color: inherit; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 14px; padding: 22px 22px 20px;
+    transition: border-color .18s, transform .18s, background .18s;
+  }
+  .door:hover, .door:focus-visible {
+    border-color: var(--signal); transform: translateY(-3px); background: var(--panel-2); outline: none;
+  }
+  .door .tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--signal); display: block; margin-bottom: 12px;
+  }
+  .door.admin .tag { color: var(--warn); }
+  .door h2 { font-family: var(--mono); font-size: 20px; margin: 0 0 6px; font-weight: 600; }
+  .door p { color: var(--muted); font-size: 14px; line-height: 1.45; margin: 0; }
+  .door .arrow { font-family: var(--mono); margin-top: 16px; color: var(--muted); font-size: 13px; }
+  .foot { margin-top: 36px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .foot code { color: var(--text); }
+</style>
+</head>
+<body>
+  <main class="console">
+    <h1><span class="replit">Replit</span> Model Meter Console</h1>
+    <p class="lede">Every request through the proxy is metered, priced, and logged.</p>
+    <p class="lede-cta">Pick your console.</p>
+    <div class="doors">
+      <a class="door" href="/dashboard">
+        <span class="tag">For developers</span>
+        <h2>Usage console</h2>
+        <p>Read your own meter: usage by model, running cost, and the log of every call you've sent.</p>
+        <div class="arrow">Open with API token →</div>
+      </a>
+      <a class="door admin" href="/admin/dashboard">
+        <span class="tag">For admins</span>
+        <h2>Control console</h2>
+        <p>Watch usage and cost across all users, set usage limits, and drill into any user's calls.</p>
+        <div class="arrow">Open with admin key →</div>
+      </a>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,29 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryUsageStore } from "../src/store/usage-store.js";
 import { InMemoryLimitStore } from "../src/store/limit-store.js";
 import { InMemoryWindowCounterStore } from "../src/store/window-counter-store.js";
 import { Limiter, LimitValidationError, validateLimitConfig } from "../src/limits/limiter.js";
 
 function setup() {
-  const usage = new InMemoryUsageStore();
   const limits = new InMemoryLimitStore();
   const windows = new InMemoryWindowCounterStore();
-  const limiter = new Limiter(limits, usage, windows);
-  return { usage, limits, windows, limiter };
+  const limiter = new Limiter(limits, windows);
+  return { limits, windows, limiter };
 }
 
 function tokens(total: number) {
-  return { promptTokens: 0, completionTokens: total, totalTokens: total };
+  return { inputTokens: 0, outputTokens: total, totalTokens: total };
 }
 
-/** Simulate a completed request: billing aggregate + limiter windows. */
+/** Simulate a completed request: advance the limiter's window counters. */
 function completeRequest(
   ctx: ReturnType<typeof setup>,
   userId: string,
   total: number,
   at: number,
 ) {
-  ctx.usage.record(userId, "m", tokens(total));
   ctx.limiter.record(userId, tokens(total), at);
 }
 
@@ -31,22 +28,6 @@ describe("Limiter", () => {
   it("allows users with no configured limits", () => {
     const ctx = setup();
     expect(ctx.limiter.check("nobody").allowed).toBe(true);
-  });
-
-  it("enforces total token limits", () => {
-    const ctx = setup();
-    ctx.limits.set("u1", { total: { maxTokens: 100 } });
-
-    completeRequest(ctx, "u1", 99, 1000);
-    expect(ctx.limiter.check("u1", 2000).allowed).toBe(true);
-
-    completeRequest(ctx, "u1", 1, 2000);
-    const decision = ctx.limiter.check("u1", 3000);
-    expect(decision.allowed).toBe(false);
-    if (!decision.allowed) {
-      expect(decision.limit).toBe("total");
-      expect(decision.retryAfterSeconds).toBe(0);
-    }
   });
 
   it("enforces short-term request-count limits and recovers when the window resets", () => {
@@ -91,16 +72,17 @@ describe("Limiter", () => {
     expect(ctx.limiter.check("u1", 2000).allowed).toBe(true);
   });
 
-  it("reports the first limit that trips when several are configured", () => {
+  it("reports shortTerm as the first limit that trips when both windows are configured", () => {
     const ctx = setup();
     ctx.limits.set("u1", {
-      shortTerm: { windowSeconds: 10, maxRequests: 100 },
-      total: { maxTokens: 10 },
+      shortTerm: { windowSeconds: 10, maxRequests: 1 },
+      longTerm: { windowSeconds: 100, maxRequests: 100 },
     });
     completeRequest(ctx, "u1", 10, 1000);
+    // shortTerm (checked first) is at its cap; longTerm has headroom.
     const decision = ctx.limiter.check("u1", 2000);
     expect(decision.allowed).toBe(false);
-    if (!decision.allowed) expect(decision.limit).toBe("total");
+    if (!decision.allowed) expect(decision.limit).toBe("shortTerm");
   });
 
   it("tracks short-term and long-term windows independently", () => {
@@ -130,10 +112,9 @@ describe("validateLimitConfig", () => {
     const config = validateLimitConfig({
       shortTerm: { windowSeconds: 60, maxRequests: 10 },
       longTerm: { windowSeconds: 3600, maxTokens: 100_000 },
-      total: { maxTokens: 1_000_000 },
     });
     expect(config.shortTerm?.maxRequests).toBe(10);
-    expect(config.total?.maxTokens).toBe(1_000_000);
+    expect(config.longTerm?.maxTokens).toBe(100_000);
   });
 
   it("rejects empty configs", () => {
@@ -150,7 +131,9 @@ describe("validateLimitConfig", () => {
     expect(() =>
       validateLimitConfig({ shortTerm: { windowSeconds: -5, maxRequests: 10 } }),
     ).toThrow(LimitValidationError);
-    expect(() => validateLimitConfig({ total: { maxTokens: 0 } })).toThrow(LimitValidationError);
+    expect(() => validateLimitConfig({ longTerm: { windowSeconds: 60, maxTokens: 0 } })).toThrow(
+      LimitValidationError,
+    );
   });
 
   it("rejects shortTerm window >= longTerm window", () => {

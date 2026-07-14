@@ -56,7 +56,7 @@ describe("proxy app", () => {
 
   beforeEach(() => {
     server = new FakeModelServer();
-    const config = loadConfig({ ADMIN_API_KEY: "test-admin-key", LOG_LEVEL: "silent" } as NodeJS.ProcessEnv);
+    const config = loadConfig({ ADMIN_API_KEY: "test-admin-key", LOG_LEVEL: "silent", STORAGE: "memory" } as NodeJS.ProcessEnv);
     app = buildApp(config, { modelServer: server as unknown as ModelServer });
   });
 
@@ -173,7 +173,7 @@ describe("proxy app", () => {
         method: "PUT",
         url: "/admin/limits/user_x",
         headers: { ...ADMIN, "content-type": "application/json" },
-        payload: JSON.stringify({ total: { maxTokens: 1000 } }),
+        payload: JSON.stringify({ longTerm: { windowSeconds: 3600, maxTokens: 1000 } }),
       });
       expect(put.statusCode).toBe(200);
 
@@ -181,7 +181,7 @@ describe("proxy app", () => {
       expect(list.json().limits).toHaveLength(1);
 
       const get = await app.inject({ method: "GET", url: "/admin/limits/user_x", headers: ADMIN });
-      expect(get.json().total.maxTokens).toBe(1000);
+      expect(get.json().longTerm.maxTokens).toBe(1000);
 
       const del = await app.inject({ method: "DELETE", url: "/admin/limits/user_x", headers: ADMIN });
       expect(del.statusCode).toBe(204);
@@ -197,20 +197,20 @@ describe("proxy app", () => {
       return res.json().user_id;
     }
 
-    it("returns 429 with an OpenAI-shaped error once a total limit is hit", async () => {
+    it("returns 429 with an OpenAI-shaped error once a token window is hit", async () => {
       const userId = await userIdOf(USER);
       await app.inject({
         method: "PUT",
         url: `/admin/limits/${userId}`,
         headers: { ...ADMIN, "content-type": "application/json" },
-        payload: JSON.stringify({ total: { maxTokens: 30 } }),
+        payload: JSON.stringify({ longTerm: { windowSeconds: 3600, maxTokens: 30 } }),
       });
 
       // First request consumes 30 tokens — allowed (limit checked before).
       const first = await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
       expect(first.statusCode).toBe(200);
 
-      // Now at the cap: rejected before reaching server.
+      // Now at the window cap: rejected before reaching server.
       const second = await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
       expect(second.statusCode).toBe(429);
       expect(second.json().error.type).toBe("rate_limit_error");
@@ -238,13 +238,90 @@ describe("proxy app", () => {
   it("exposes admin usage across users", async () => {
     await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
     const res = await app.inject({ method: "GET", url: "/admin/usage", headers: ADMIN });
-    const users = res.json().users;
-    expect(users).toHaveLength(1);
-    expect(users[0].total_tokens).toBe(30);
+    const body = res.json();
+    expect(body.users).toHaveLength(1);
+    expect(body.users[0].totals.total_tokens).toBe(30);
+    expect(body.users[0].totals.cost_usd).toBeGreaterThan(0);
+    expect(body.fleet.total_tokens).toBe(30);
   });
 
   it("responds to health checks without auth", async () => {
     const res = await app.inject({ method: "GET", url: "/healthz" });
     expect(res.statusCode).toBe(200);
+  });
+
+  describe("call history + billing", () => {
+    it("records successful calls in the user's history with cost", async () => {
+      await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
+      const res = await app.inject({ method: "GET", url: "/v1/history", headers: USER });
+      const body = res.json();
+      expect(body.calls).toHaveLength(1);
+      expect(body.calls[0]).toMatchObject({ model: "llama3.2:1b", outcome: "ok", total_tokens: 30, streaming: false });
+      expect(body.calls[0].cost_usd).toBeGreaterThan(0);
+    });
+
+    it("records rejected calls in history without billing them", async () => {
+      const userId = (await app.inject({ method: "GET", url: "/v1/usage", headers: USER })).json().user_id;
+      await app.inject({
+        method: "PUT",
+        url: `/admin/limits/${userId}`,
+        headers: { ...ADMIN, "content-type": "application/json" },
+        payload: JSON.stringify({ longTerm: { windowSeconds: 3600, maxTokens: 30 } }),
+      });
+      // First succeeds (30 tokens), second is rejected at the window cap.
+      await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
+      const blocked = await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
+      expect(blocked.statusCode).toBe(429);
+
+      const hist = (await app.inject({ method: "GET", url: "/v1/history", headers: USER })).json();
+      const rejected = hist.calls.filter((c: { outcome: string }) => c.outcome === "rejected");
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].cost_usd).toBe(0);
+      expect(rejected[0].status_code).toBe(429);
+    });
+
+    it("records upstream errors in history without billing", async () => {
+      server.respondWith = () => jsonResponse({ error: { message: "model not found" } }, 404);
+      await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
+      const hist = (await app.inject({ method: "GET", url: "/v1/history", headers: USER })).json();
+      expect(hist.calls[0]).toMatchObject({ outcome: "error", status_code: 404, cost_usd: 0 });
+    });
+
+    it("lets an admin read any user's history", async () => {
+      await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
+      const userId = (await app.inject({ method: "GET", url: "/v1/usage", headers: USER })).json().user_id;
+      const res = await app.inject({ method: "GET", url: `/admin/history/${userId}`, headers: ADMIN });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().calls).toHaveLength(1);
+    });
+
+    it("exposes the price sheet to admins", async () => {
+      const res = await app.inject({ method: "GET", url: "/admin/pricing", headers: ADMIN });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.unit).toBe("usd_per_million_tokens");
+      expect(body.models.length).toBeGreaterThan(0);
+    });
+
+    it("keeps history private to each user", async () => {
+      await app.inject({ method: "POST", url: "/v1/chat/completions", headers: USER, payload: chatPayload });
+      const other = await app.inject({
+        method: "GET",
+        url: "/v1/history",
+        headers: { authorization: "Bearer someone-else" },
+      });
+      expect(other.json().calls).toHaveLength(0);
+    });
+  });
+
+  describe("dashboards", () => {
+    it("serves the landing page and both dashboards as HTML without auth", async () => {
+      for (const url of ["/", "/dashboard", "/admin/dashboard"]) {
+        const res = await app.inject({ method: "GET", url });
+        expect(res.statusCode, url).toBe(200);
+        expect(res.headers["content-type"]).toContain("text/html");
+        expect(res.body).toContain("Meter");
+      }
+    });
   });
 });

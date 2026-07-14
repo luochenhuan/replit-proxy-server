@@ -21,11 +21,13 @@ export function usageFromJson(body: unknown): Usage | undefined {
 function normalizeUsage(usage: unknown): Usage | undefined {
   if (typeof usage !== "object" || usage === null) return undefined;
   const u = usage as Record<string, unknown>;
-  const prompt = typeof u.prompt_tokens === "number" ? u.prompt_tokens : 0;
-  const completion = typeof u.completion_tokens === "number" ? u.completion_tokens : 0;
-  const total = typeof u.total_tokens === "number" ? u.total_tokens : prompt + completion;
-  if (prompt === 0 && completion === 0 && total === 0) return undefined;
-  return { promptTokens: prompt, completionTokens: completion, totalTokens: total };
+  // Wire field names are the OpenAI-compatible `prompt_tokens`/`completion_tokens`
+  // that Ollama emits; map them onto our internal input/output naming.
+  const input = typeof u.prompt_tokens === "number" ? u.prompt_tokens : 0;
+  const output = typeof u.completion_tokens === "number" ? u.completion_tokens : 0;
+  const total = typeof u.total_tokens === "number" ? u.total_tokens : input + output;
+  if (input === 0 && output === 0 && total === 0) return undefined;
+  return { inputTokens: input, outputTokens: output, totalTokens: total };
 }
 
 /**

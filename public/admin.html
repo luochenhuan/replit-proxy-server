@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Control console · Replit Model Meter Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0E141B; --panel: #18212C; --panel-2: #202B38; --line: #2C3946;
+    --text: #E6EDF3; --muted: #8296A8;
+    --signal: #4CD4B0; --warn: #F5B14C; --over: #FF6B6B;
+    --replit: #FF3C00;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: "Inter", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ink); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; line-height: 1.5; }
+  a { color: var(--warn); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 24px 80px; }
+
+  header.bar { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+  .brand { font-family: var(--mono); font-weight: 700; font-size: 20px; letter-spacing: -0.01em; color: var(--text); }
+  .brand .replit { color: var(--replit); }
+  .brand a { text-decoration: none; color: inherit; }
+  .role { font-family: var(--mono); font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+
+  .gate { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 28px; max-width: 520px; }
+  .gate h1 { font-family: var(--mono); font-size: 22px; margin: 0 0 6px; font-weight: 600; }
+  .gate p { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .field { display: flex; gap: 10px; }
+  input[type=password], input[type=text], input[type=number] {
+    background: var(--ink); border: 1px solid var(--line); border-radius: 10px; color: var(--text);
+    font-family: var(--mono); font-size: 14px; padding: 11px 13px; min-width: 0;
+  }
+  .field input { flex: 1; }
+  input:focus-visible { outline: 2px solid var(--warn); outline-offset: 1px; border-color: transparent; }
+  button {
+    font-family: var(--mono); font-size: 14px; font-weight: 600; cursor: pointer;
+    background: var(--warn); color: #2a1b00; border: 0; border-radius: 10px; padding: 11px 18px; transition: filter .15s;
+  }
+  button:hover { filter: brightness(1.08); }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  button.ghost:hover { color: var(--text); border-color: var(--muted); filter: none; }
+  button.danger { background: transparent; color: var(--over); border: 1px solid color-mix(in srgb, var(--over) 45%, transparent); }
+  button.danger:hover { background: color-mix(in srgb, var(--over) 12%, transparent); filter: none; }
+  .err { color: var(--over); font-family: var(--mono); font-size: 13px; margin-top: 14px; min-height: 18px; }
+  .hidden { display: none !important; }
+
+  .readouts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 26px; }
+  @media (max-width: 760px) { .readouts { grid-template-columns: 1fr 1fr; } }
+  .readout { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .readout .label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .readout .value { font-family: var(--mono); font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  .readout.cost .value { color: var(--warn); }
+
+  h2.section { font-family: var(--mono); font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 14px; border-bottom: 1px solid var(--line); padding-bottom: 10px; display: flex; align-items: center; gap: 12px; }
+  h2.section .stamp { font-family: var(--mono); font-size: 12px; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+  .tablewrap { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: right; padding: 11px 16px; border-bottom: 1px solid var(--line); font-family: var(--mono); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  th:first-child, td:first-child { text-align: left; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr.user { cursor: pointer; }
+  tbody tr.user:hover { background: var(--panel-2); }
+  td.id { color: var(--text); }
+  td.id .caret { color: var(--muted); display: inline-block; width: 14px; transition: transform .15s; }
+  tr.open td.id .caret { transform: rotate(90deg); color: var(--warn); }
+  .limitcell { font-size: 11px; color: var(--muted); }
+  .limitcell .set { color: var(--signal); }
+  .cost { color: var(--warn); }
+  .none { color: var(--muted); font-family: var(--mono); font-size: 13px; padding: 22px; text-align: center; background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 20px; border: 1px solid; }
+  .pill.ok { color: var(--signal); border-color: color-mix(in srgb, var(--signal) 40%, transparent); }
+  .pill.rejected { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+  .pill.error { color: var(--over); border-color: color-mix(in srgb, var(--over) 40%, transparent); }
+  .dim { color: var(--muted); }
+
+  /* Drawer for per-user detail */
+  tr.detail td { padding: 0; border-bottom: 1px solid var(--line); background: var(--ink); }
+  .drawer { padding: 20px 18px; }
+  .drawer h3 { font-family: var(--mono); font-size: 13px; margin: 0 0 14px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+  .drawer .cols { display: grid; grid-template-columns: 340px 1fr; gap: 22px; }
+  @media (max-width: 860px) { .drawer .cols { grid-template-columns: 1fr; } }
+
+  /* Limit editor */
+  .editor { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .editor .grp { margin-bottom: 14px; }
+  .editor label.h { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+  .editor .row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .editor .row span { font-family: var(--mono); font-size: 12px; color: var(--muted); width: 96px; }
+  .editor .row input { width: 100%; padding: 8px 10px; font-size: 13px; }
+  .editor .actions { display: flex; gap: 8px; margin-top: 6px; }
+  .editor .msg { font-family: var(--mono); font-size: 12px; margin-top: 10px; min-height: 16px; }
+  .editor .msg.ok { color: var(--signal); }
+  .editor .msg.bad { color: var(--over); }
+
+  .miniwrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 360px; }
+  .miniwrap table { font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="bar">
+      <div class="brand"><a href="/"><span class="replit">Replit</span> Model Meter Console</a></div>
+      <div class="role">Admin console</div>
+    </header>
+
+    <div id="gate" class="gate">
+      <h1>Control console</h1>
+      <p>Enter the admin key to view usage and cost across all users and administer their limits.</p>
+      <form id="gateForm" class="field">
+        <input id="key" type="password" placeholder="Admin key" autocomplete="off" spellcheck="false" />
+        <button type="submit">Enter</button>
+      </form>
+      <div id="gateErr" class="err"></div>
+    </div>
+
+    <div id="dash" class="hidden">
+      <div class="readouts">
+        <div class="readout"><div class="label">Users</div><div class="value" id="rUsers">0</div></div>
+        <div class="readout"><div class="label">Total requests</div><div class="value" id="rReq">0</div></div>
+        <div class="readout"><div class="label">Total tokens</div><div class="value" id="rTokens">0</div></div>
+        <div class="readout cost"><div class="label">Total cost</div><div class="value" id="rCost">$0.00</div></div>
+      </div>
+
+      <h2 class="section">
+        <span>Users</span>
+        <span style="flex:1"></span>
+        <span class="stamp" id="stamp"></span>
+        <button class="ghost" id="reload" type="button">Refresh</button>
+        <button class="ghost" id="signout" type="button">Sign out</button>
+      </h2>
+      <div id="usersWrap" class="tablewrap">
+        <table>
+          <thead><tr><th>User</th><th>Requests</th><th>Tokens</th><th>Cost</th><th>Limits</th></tr></thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+      <div id="usersNone" class="none hidden">No usage recorded yet. Send a request through the proxy first.</div>
+    </div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = new Intl.NumberFormat("en-US");
+function money(n) {
+  if (!n) return "$0.00";
+  if (n < 0.01) return "$" + n.toFixed(6);
+  return "$" + n.toFixed(n < 1 ? 4 : 2);
+}
+function timeAgo(iso) {
+  const d = new Date(iso), s = (Date.now() - d.getTime()) / 1000;
+  if (s < 60) return Math.floor(s) + "s ago";
+  if (s < 3600) return Math.floor(s / 60) + "m ago";
+  if (s < 86400) return Math.floor(s / 3600) + "h ago";
+  return d.toLocaleDateString();
+}
+
+let key = sessionStorage.getItem("mr_admin_key") || "";
+const openRows = new Set();
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    method: opts.method || "GET",
+    headers: Object.assign({ authorization: "Bearer " + key }, opts.body ? { "content-type": "application/json" } : {}),
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (res.status === 403) throw new Error("Admin key rejected.");
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data.error && data.error.message) || ("Request failed (" + res.status + ")."));
+  return data;
+}
+
+// Render one window's caps, e.g. "short 60s: 30 req, 50k tokens". A window may
+// cap requests, tokens, or both.
+function windowSummary(name, w) {
+  const caps = [];
+  if (w.maxRequests !== undefined) caps.push(fmt.format(w.maxRequests) + " req");
+  if (w.maxTokens !== undefined) caps.push(fmt.format(w.maxTokens) + " tokens");
+  return `${name} ${w.windowSeconds}s: ${caps.join(", ")}`;
+}
+
+function limitSummary(limits) {
+  if (!limits) return `<span class="limitcell">none</span>`;
+  const parts = [];
+  if (limits.shortTerm) parts.push(windowSummary("short", limits.shortTerm));
+  if (limits.longTerm) parts.push(windowSummary("long", limits.longTerm));
+  if (!parts.length) return `<span class="limitcell">none</span>`;
+  return `<span class="limitcell"><span class="set">${parts.join(" · ")}</span></span>`;
+}
+
+function renderUsers(data) {
+  $("rUsers").textContent = fmt.format(data.fleet.users);
+  $("rReq").textContent = fmt.format(data.fleet.requests);
+  $("rTokens").textContent = fmt.format(data.fleet.total_tokens);
+  $("rCost").textContent = money(data.fleet.cost_usd);
+  $("stamp").textContent = "updated " + new Date().toLocaleTimeString();
+
+  const body = $("usersBody");
+  if (!data.users.length) {
+    $("usersWrap").classList.add("hidden"); $("usersNone").classList.remove("hidden"); return;
+  }
+  $("usersWrap").classList.remove("hidden"); $("usersNone").classList.add("hidden");
+
+  body.innerHTML = "";
+  data.users
+    .sort((a, b) => b.totals.cost_usd - a.totals.cost_usd)
+    .forEach((u) => {
+      const tr = document.createElement("tr");
+      tr.className = "user" + (openRows.has(u.user_id) ? " open" : "");
+      tr.innerHTML = `
+        <td class="id"><span class="caret">›</span> ${u.user_id}</td>
+        <td>${fmt.format(u.totals.requests)}</td>
+        <td>${fmt.format(u.totals.total_tokens)}</td>
+        <td class="cost">${money(u.totals.cost_usd)}</td>
+        <td>${limitSummary(u.limits)}</td>`;
+      tr.addEventListener("click", () => toggleRow(u, tr));
+      body.appendChild(tr);
+      if (openRows.has(u.user_id)) insertDetail(u, tr);
+    });
+}
+
+function toggleRow(u, tr) {
+  const id = u.user_id;
+  if (openRows.has(id)) {
+    openRows.delete(id); tr.classList.remove("open");
+    const next = tr.nextElementSibling;
+    if (next && next.classList.contains("detail")) next.remove();
+  } else {
+    openRows.add(id); tr.classList.add("open");
+    insertDetail(u, tr);
+  }
+}
+
+function insertDetail(u, tr) {
+  const detail = document.createElement("tr");
+  detail.className = "detail";
+  detail.innerHTML = `<td colspan="5"><div class="drawer">
+    <div class="cols">
+      <div>
+        <h3>Usage limits</h3>
+        ${editorHtml(u)}
+      </div>
+      <div>
+        <h3>Recent calls</h3>
+        <div class="miniwrap"><table>
+          <thead><tr><th>Time</th><th>Model</th><th>Total</th><th>Cost</th><th>Status</th></tr></thead>
+          <tbody id="calls_${cssId(u.user_id)}"><tr><td class="dim" colspan="5">Loading…</td></tr></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div></td>`;
+  tr.after(detail);
+  wireEditor(u);
+  loadCalls(u.user_id);
+}
+
+function cssId(s) { return s.replace(/[^a-zA-Z0-9_]/g, "_"); }
+
+function editorHtml(u) {
+  const L = u.limits || {};
+  const st = L.shortTerm || {}, lt = L.longTerm || {};
+  const id = cssId(u.user_id);
+  const num = (v) => (v === undefined || v === null ? "" : v);
+  return `<div class="editor" data-user="${u.user_id}">
+    <div class="grp">
+      <label class="h">Short-term window</label>
+      <div class="row"><span>window (s)</span><input type="number" min="1" id="st_w_${id}" value="${num(st.windowSeconds)}" placeholder="60"></div>
+      <div class="row"><span>max requests</span><input type="number" min="1" id="st_r_${id}" value="${num(st.maxRequests)}" placeholder="optional"></div>
+      <div class="row"><span>max tokens</span><input type="number" min="1" id="st_t_${id}" value="${num(st.maxTokens)}" placeholder="optional"></div>
+    </div>
+    <div class="grp">
+      <label class="h">Long-term window</label>
+      <div class="row"><span>window (s)</span><input type="number" min="1" id="lt_w_${id}" value="${num(lt.windowSeconds)}" placeholder="86400"></div>
+      <div class="row"><span>max requests</span><input type="number" min="1" id="lt_r_${id}" value="${num(lt.maxRequests)}" placeholder="optional"></div>
+      <div class="row"><span>max tokens</span><input type="number" min="1" id="lt_t_${id}" value="${num(lt.maxTokens)}" placeholder="optional"></div>
+    </div>
+    <div class="actions">
+      <button type="button" id="save_${id}">Save limits</button>
+      <button type="button" class="danger" id="clear_${id}">Remove all</button>
+    </div>
+    <div class="msg" id="msg_${id}"></div>
+  </div>`;
+}
+
+function readNum(id) { const v = $(id).value.trim(); return v === "" ? undefined : Number(v); }
+
+function buildConfig(id) {
+  const cfg = {};
+  const stw = readNum(`st_w_${id}`), str = readNum(`st_r_${id}`), stt = readNum(`st_t_${id}`);
+  if (stw !== undefined || str !== undefined || stt !== undefined) {
+    cfg.shortTerm = { windowSeconds: stw };
+    if (str !== undefined) cfg.shortTerm.maxRequests = str;
+    if (stt !== undefined) cfg.shortTerm.maxTokens = stt;
+  }
+  const ltw = readNum(`lt_w_${id}`), ltr = readNum(`lt_r_${id}`), ltt = readNum(`lt_t_${id}`);
+  if (ltw !== undefined || ltr !== undefined || ltt !== undefined) {
+    cfg.longTerm = { windowSeconds: ltw };
+    if (ltr !== undefined) cfg.longTerm.maxRequests = ltr;
+    if (ltt !== undefined) cfg.longTerm.maxTokens = ltt;
+  }
+  return cfg;
+}
+
+function wireEditor(u) {
+  const id = cssId(u.user_id), msg = () => $(`msg_${id}`);
+  $(`save_${id}`).addEventListener("click", async () => {
+    const cfg = buildConfig(id);
+    msg().className = "msg"; msg().textContent = "";
+    try {
+      await api("/admin/limits/" + encodeURIComponent(u.user_id), { method: "PUT", body: cfg });
+      msg().className = "msg ok"; msg().textContent = "Limits saved.";
+      await reload(true);
+    } catch (e) { msg().className = "msg bad"; msg().textContent = e.message; }
+  });
+  $(`clear_${id}`).addEventListener("click", async () => {
+    msg().className = "msg"; msg().textContent = "";
+    try {
+      await api("/admin/limits/" + encodeURIComponent(u.user_id), { method: "DELETE" });
+      msg().className = "msg ok"; msg().textContent = "Limits removed.";
+      await reload(true);
+    } catch (e) { msg().className = "msg bad"; msg().textContent = e.message; }
+  });
+}
+
+async function loadCalls(userId) {
+  const tbody = $(`calls_${cssId(userId)}`);
+  if (!tbody) return;
+  try {
+    const h = await api("/admin/history/" + encodeURIComponent(userId));
+    if (!h.calls.length) { tbody.innerHTML = `<tr><td class="dim" colspan="5">No calls recorded.</td></tr>`; return; }
+    tbody.innerHTML = h.calls.map((c) => `<tr>
+      <td class="dim" title="${c.at}">${timeAgo(c.at)}</td>
+      <td>${c.model}</td>
+      <td>${fmt.format(c.total_tokens)}</td>
+      <td class="cost">${money(c.cost_usd)}</td>
+      <td><span class="pill ${c.outcome}">${c.outcome}</span></td>
+    </tr>`).join("");
+  } catch (e) {
+    tbody.innerHTML = `<tr><td class="dim" colspan="5">${e.message}</td></tr>`;
+  }
+}
+
+async function reload(keepOpen) {
+  const data = await api("/admin/usage");
+  renderUsers(data);
+}
+
+function showDash() { $("gate").classList.add("hidden"); $("dash").classList.remove("hidden"); }
+function showGate() { $("dash").classList.add("hidden"); $("gate").classList.remove("hidden"); }
+
+$("gateForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const val = $("key").value.trim();
+  if (!val) return;
+  key = val; $("gateErr").textContent = "";
+  try {
+    await reload();
+    sessionStorage.setItem("mr_admin_key", key);
+    showDash();
+  } catch (err) { $("gateErr").textContent = err.message; }
+});
+
+$("reload").addEventListener("click", () => reload().catch((e) => alert(e.message)));
+$("signout").addEventListener("click", () => {
+  sessionStorage.removeItem("mr_admin_key"); key = ""; $("key").value = ""; openRows.clear(); showGate();
+});
+
+if (key) reload().then(showDash).catch(() => { key = ""; sessionStorage.removeItem("mr_admin_key"); });
+</script>
+</body>
+</html>

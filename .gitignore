@@ -18,3 +18,9 @@ build/
 CLAUDE.md
 AGENTS.md
 Cloud Services Take-Home Interview Question.md
+
+# SQLite database files
+data/
+*.db
+*.db-wal
+*.db-shm

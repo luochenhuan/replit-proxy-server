@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Usage console · Replit Model Meter Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0E141B; --panel: #18212C; --panel-2: #202B38; --line: #2C3946;
+    --text: #E6EDF3; --muted: #8296A8;
+    --signal: #4CD4B0; --warn: #F5B14C; --over: #FF6B6B;
+    --replit: #FF3C00;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: "Inter", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ink); color: var(--text); font-family: var(--sans);
+    -webkit-font-smoothing: antialiased; line-height: 1.5;
+  }
+  a { color: var(--signal); }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 28px 24px 80px; }
+
+  header.bar { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+  .brand { font-family: var(--mono); font-weight: 700; font-size: 20px; letter-spacing: -0.01em; color: var(--text); }
+  .brand .replit { color: var(--replit); }
+  .brand a { text-decoration: none; color: inherit; }
+  .role { font-family: var(--mono); font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+
+  /* Auth gate */
+  .gate { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 28px; max-width: 520px; }
+  .gate h1 { font-family: var(--mono); font-size: 22px; margin: 0 0 6px; font-weight: 600; }
+  .gate p { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .field { display: flex; gap: 10px; }
+  input[type=password], input[type=text] {
+    flex: 1; background: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+    color: var(--text); font-family: var(--mono); font-size: 14px; padding: 12px 14px; min-width: 0;
+  }
+  input:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; border-color: transparent; }
+  button {
+    font-family: var(--mono); font-size: 14px; font-weight: 600; cursor: pointer;
+    background: var(--signal); color: #04231c; border: 0; border-radius: 10px; padding: 12px 18px;
+    transition: filter .15s;
+  }
+  button:hover { filter: brightness(1.08); }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  button.ghost:hover { color: var(--text); border-color: var(--muted); filter: none; }
+  .err { color: var(--over); font-family: var(--mono); font-size: 13px; margin-top: 14px; min-height: 18px; }
+
+  .hidden { display: none !important; }
+
+  /* Summary readouts */
+  .readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 26px; }
+  @media (max-width: 640px) { .readouts { grid-template-columns: 1fr; } }
+  .readout { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .readout .label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .readout .value { font-family: var(--mono); font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .readout .sub { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .readout.cost .value { color: var(--signal); }
+
+  section { margin-bottom: 30px; }
+  h2.section { font-family: var(--mono); font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 14px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+
+  /* Gauge: the signature element */
+  .gauge { margin-bottom: 16px; }
+  .gauge .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
+  .gauge .name { font-family: var(--mono); font-size: 13px; color: var(--text); }
+  .gauge .read { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .gauge .track { position: relative; height: 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .gauge .fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 6px; transition: width .5s cubic-bezier(.2,.7,.2,1); background: var(--signal); }
+  .gauge .fill.warn { background: var(--warn); }
+  .gauge .fill.over { background: var(--over); }
+  .gauge .ticks { position: absolute; inset: 0; display: flex; justify-content: space-between; pointer-events: none; }
+  .gauge .ticks span { width: 1px; background: var(--line); opacity: .6; }
+
+  .none { color: var(--muted); font-family: var(--mono); font-size: 13px; padding: 22px; text-align: center; background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
+
+  /* Tables */
+  .tablewrap { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: right; padding: 11px 16px; border-bottom: 1px solid var(--line); font-family: var(--mono); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  th:first-child, td:first-child { text-align: left; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: var(--panel-2); }
+  td.model { color: var(--text); }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 20px; border: 1px solid; }
+  .pill.ok { color: var(--signal); border-color: color-mix(in srgb, var(--signal) 40%, transparent); }
+  .pill.rejected { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+  .pill.error { color: var(--over); border-color: color-mix(in srgb, var(--over) 40%, transparent); }
+  .dim { color: var(--muted); }
+  .refresh { display: flex; gap: 10px; align-items: center; }
+  .stamp { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="bar">
+      <div class="brand"><a href="/"><span class="replit">Replit</span> Model Meter Console</a></div>
+      <div class="role">Developer console</div>
+    </header>
+
+    <!-- Auth gate -->
+    <div id="gate" class="gate">
+      <h1>Read your meter</h1>
+      <p>Enter the API token your app sends to the proxy. Your usage is scoped to that token - nobody else's data is visible.</p>
+      <form id="gateForm" class="field">
+        <input id="token" type="password" placeholder="Bearer token, e.g. my-user-token" autocomplete="off" spellcheck="false" />
+        <button type="submit">View usage</button>
+      </form>
+      <div id="gateErr" class="err"></div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dash" class="hidden">
+      <div class="readouts">
+        <div class="readout">
+          <div class="label">Total tokens</div>
+          <div class="value" id="rTokens">0</div>
+          <div class="sub" id="rRequests">0 requests</div>
+        </div>
+        <div class="readout cost">
+          <div class="label">Cost to date</div>
+          <div class="value" id="rCost">$0.00</div>
+          <div class="sub">billed as-is from token usage</div>
+        </div>
+        <div class="readout">
+          <div class="label">Models used</div>
+          <div class="value" id="rModels">0</div>
+          <div class="sub" id="rId">-</div>
+        </div>
+      </div>
+
+      <section id="limitsSection" class="hidden">
+        <h2 class="section">Usage against limits</h2>
+        <div id="gauges"></div>
+      </section>
+
+      <section>
+        <h2 class="section">Usage by model</h2>
+        <div id="modelsWrap" class="tablewrap">
+          <table>
+            <thead><tr><th>Model</th><th>Requests</th><th>Input</th><th>Output</th><th>Total</th><th>Cost</th></tr></thead>
+            <tbody id="modelsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="section refresh">
+          <span>Call history</span>
+          <span style="flex:1"></span>
+          <span class="stamp" id="stamp"></span>
+          <button class="ghost" id="reload" type="button">Refresh</button>
+          <button class="ghost" id="signout" type="button">Sign out</button>
+        </h2>
+        <div id="historyWrap" class="tablewrap">
+          <table>
+            <thead><tr><th>Time</th><th>Model</th><th>Type</th><th>Input</th><th>Output</th><th>Total</th><th>Cost</th><th>Status</th></tr></thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+        <div id="historyNone" class="none hidden">No calls yet. Send a request through the proxy and refresh.</div>
+      </section>
+    </div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = new Intl.NumberFormat("en-US");
+function money(n) {
+  if (n === 0) return "$0.00";
+  if (n < 0.01) return "$" + n.toFixed(6);
+  return "$" + n.toFixed(n < 1 ? 4 : 2);
+}
+function timeAgo(iso) {
+  const d = new Date(iso), s = (Date.now() - d.getTime()) / 1000;
+  if (s < 60) return Math.floor(s) + "s ago";
+  if (s < 3600) return Math.floor(s / 60) + "m ago";
+  if (s < 86400) return Math.floor(s / 3600) + "h ago";
+  return d.toLocaleDateString();
+}
+
+let token = sessionStorage.getItem("mr_user_token") || "";
+
+async function api(path) {
+  const res = await fetch(path, { headers: { authorization: "Bearer " + token } });
+  if (res.status === 401) throw new Error("Token rejected. Check the value and try again.");
+  if (!res.ok) throw new Error("Request failed (" + res.status + ").");
+  return res.json();
+}
+
+function gauge(name, used, cap, unit) {
+  const pct = cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
+  const cls = pct >= 100 ? "over" : pct >= 80 ? "warn" : "";
+  const ticks = Array.from({ length: 11 }, () => "<span></span>").join("");
+  return `<div class="gauge">
+    <div class="head">
+      <span class="name">${name}</span>
+      <span class="read">${fmt.format(used)} / ${fmt.format(cap)} ${unit}</span>
+    </div>
+    <div class="track">
+      <div class="fill ${cls}" style="width:${pct}%"></div>
+      <div class="ticks">${ticks}</div>
+    </div>
+  </div>`;
+}
+
+function renderGauges(usage, limits) {
+  const box = $("gauges");
+  if (!limits) { $("limitsSection").classList.add("hidden"); box.innerHTML = ""; return; }
+  const rows = [];
+  // Windowed caps: we can show the cap; live window consumption isn't in the usage
+  // rollup, so these communicate the ceiling and are annotated as per-window.
+  for (const [key, label] of [["shortTerm", "Short-term window"], ["longTerm", "Long-term window"]]) {
+    const w = limits[key];
+    if (!w) continue;
+    if (w.maxTokens) rows.push(gauge(label + " (" + w.windowSeconds + "s)", 0, w.maxTokens, "tokens"));
+    if (w.maxRequests) rows.push(gauge(label + " req (" + w.windowSeconds + "s)", 0, w.maxRequests, "req"));
+  }
+  if (!rows.length) { $("limitsSection").classList.add("hidden"); return; }
+  $("limitsSection").classList.remove("hidden");
+  box.innerHTML = rows.join("");
+}
+
+function renderModels(usage) {
+  const body = $("modelsBody");
+  const entries = Object.entries(usage.models);
+  if (!entries.length) {
+    body.innerHTML = `<tr><td class="dim" colspan="6">No usage recorded yet.</td></tr>`;
+    return;
+  }
+  body.innerHTML = entries.map(([model, m]) => `<tr>
+    <td class="model">${model}</td>
+    <td>${fmt.format(m.requests)}</td>
+    <td>${fmt.format(m.input_tokens)}</td>
+    <td>${fmt.format(m.output_tokens)}</td>
+    <td>${fmt.format(m.total_tokens)}</td>
+    <td>${money(m.cost_usd)}</td>
+  </tr>`).join("");
+}
+
+function renderHistory(hist) {
+  const body = $("historyBody");
+  const none = $("historyNone");
+  if (!hist.calls.length) {
+    $("historyWrap").classList.add("hidden"); none.classList.remove("hidden"); return;
+  }
+  $("historyWrap").classList.remove("hidden"); none.classList.add("hidden");
+  body.innerHTML = hist.calls.map((c) => `<tr>
+    <td class="dim" title="${c.at}">${timeAgo(c.at)}</td>
+    <td class="model">${c.model}</td>
+    <td class="dim">${c.streaming ? "stream" : "sync"}</td>
+    <td>${fmt.format(c.input_tokens)}</td>
+    <td>${fmt.format(c.output_tokens)}</td>
+    <td>${fmt.format(c.total_tokens)}</td>
+    <td>${money(c.cost_usd)}</td>
+    <td><span class="pill ${c.outcome}">${c.outcome}</span></td>
+  </tr>`).join("");
+}
+
+async function load() {
+  const [usage, hist] = await Promise.all([api("/v1/usage"), api("/v1/history")]);
+  $("rTokens").textContent = fmt.format(usage.totals.total_tokens);
+  $("rRequests").textContent = fmt.format(usage.totals.requests) + " requests";
+  $("rCost").textContent = money(usage.totals.cost_usd);
+  $("rModels").textContent = Object.keys(usage.models).length;
+  $("rId").textContent = usage.user_id;
+  renderGauges(usage, usage.limits);
+  renderModels(usage);
+  renderHistory(hist);
+  $("stamp").textContent = "updated " + new Date().toLocaleTimeString();
+}
+
+function showDash() { $("gate").classList.add("hidden"); $("dash").classList.remove("hidden"); }
+function showGate() { $("dash").classList.add("hidden"); $("gate").classList.remove("hidden"); }
+
+$("gateForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const val = $("token").value.trim();
+  if (!val) return;
+  token = val;
+  $("gateErr").textContent = "";
+  try {
+    await load();
+    sessionStorage.setItem("mr_user_token", token);
+    showDash();
+  } catch (err) {
+    $("gateErr").textContent = err.message;
+  }
+});
+
+$("reload").addEventListener("click", () => load().catch((e) => alert(e.message)));
+$("signout").addEventListener("click", () => {
+  sessionStorage.removeItem("mr_user_token"); token = ""; $("token").value = ""; showGate();
+});
+
+// Auto-resume a session.
+if (token) load().then(showDash).catch(() => { token = ""; sessionStorage.removeItem("mr_user_token"); });
+</script>
+</body>
+</html>

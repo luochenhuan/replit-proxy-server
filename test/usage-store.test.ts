@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { InMemoryUsageStore } from "../src/store/usage-store.js";
 
 function usage(total: number) {
-  return { promptTokens: Math.floor(total / 2), completionTokens: Math.ceil(total / 2), totalTokens: total };
+  return { inputTokens: Math.floor(total / 2), outputTokens: Math.ceil(total / 2), totalTokens: total };
 }
 
 describe("InMemoryUsageStore", () => {
@@ -15,16 +15,15 @@ describe("InMemoryUsageStore", () => {
     const byModel = store.totalsByModel("u1");
     expect(byModel.get("llama3.2:1b")).toMatchObject({ totalTokens: 150, requests: 2 });
     expect(byModel.get("moondream")).toMatchObject({ totalTokens: 30, requests: 1 });
-    expect(store.totalTokens("u1")).toBe(180);
   });
 
   it("splits prompt and completion tokens in aggregates", () => {
     const store = new InMemoryUsageStore();
-    store.record("u1", "m", { promptTokens: 10, completionTokens: 20, totalTokens: 30 });
-    store.record("u1", "m", { promptTokens: 5, completionTokens: 5, totalTokens: 10 });
+    store.record("u1", "m", { inputTokens: 10, outputTokens: 20, totalTokens: 30 });
+    store.record("u1", "m", { inputTokens: 5, outputTokens: 5, totalTokens: 10 });
     expect(store.totalsByModel("u1").get("m")).toEqual({
-      promptTokens: 15,
-      completionTokens: 25,
+      inputTokens: 15,
+      outputTokens: 25,
       totalTokens: 40,
       requests: 2,
     });
@@ -33,7 +32,6 @@ describe("InMemoryUsageStore", () => {
   it("isolates users", () => {
     const store = new InMemoryUsageStore();
     store.record("u1", "m", usage(100));
-    expect(store.totalTokens("u2")).toBe(0);
     expect(store.totalsByModel("u2").size).toBe(0);
   });
 

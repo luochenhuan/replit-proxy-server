@@ -2,9 +2,13 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Usage } from "../types.js";
 import type { Limiter } from "../limits/limiter.js";
 import type { UsageStore } from "../store/usage-store.js";
+import type { CallHistoryStore, CallOutcome } from "../store/call-history-store.js";
+import type { Pricing } from "../billing/pricing.js";
 import type { ModelServer } from "./model-server.js";
 import { SseUsageScanner, usageFromJson } from "./usage-extractor.js";
 import { openAiError } from "../errors.js";
+
+const NO_USAGE: Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 
 /**
  * Core proxy logic for OpenAI-compatible completion endpoints.
@@ -25,6 +29,8 @@ export class ProxyHandler {
     private readonly modelServer: ModelServer,
     private readonly limiter: Limiter,
     private readonly usage: UsageStore,
+    private readonly history: CallHistoryStore,
+    private readonly pricing: Pricing,
   ) {}
 
   async handleCompletion(
@@ -34,17 +40,8 @@ export class ProxyHandler {
   ): Promise<void> {
     const userId = req.userId!;
 
-    const decision = this.limiter.check(userId);
-    if (!decision.allowed) {
-      reply
-        .code(429)
-        .header("retry-after", String(decision.retryAfterSeconds))
-        .send(openAiError(decision.reason, "rate_limit_exceeded", 429));
-      return;
-    }
-
-    // Body arrives pre-parsed by fastify's JSON parser. We must parse it
-    // anyway (to read `model` and inject stream_options), so re-serialize.
+    // Parse the body first so a rejected call can still be attributed to its
+    // model in the history view.
     const body = req.body as Record<string, unknown> | undefined;
     if (typeof body !== "object" || body === null) {
       reply.code(400).send(openAiError("Request body must be a JSON object.", "invalid_request_error", 400));
@@ -53,6 +50,16 @@ export class ProxyHandler {
 
     const model = typeof body.model === "string" ? body.model : "unknown";
     const isStreaming = body.stream === true;
+
+    const decision = this.limiter.check(userId);
+    if (!decision.allowed) {
+      this.recordCall(userId, model, isStreaming, NO_USAGE, "rejected", 429);
+      reply
+        .code(429)
+        .header("retry-after", String(decision.retryAfterSeconds))
+        .send(openAiError(decision.reason, "rate_limit_exceeded", 429));
+      return;
+    }
 
     if (isStreaming) {
       // Guarantee the final SSE chunk includes usage, regardless of what the
@@ -83,6 +90,7 @@ export class ProxyHandler {
     } catch (err) {
       if (abort.signal.aborted) return; // client went away; nothing to send
       req.log.error({ err }, "server request failed");
+      this.recordCall(userId, model, isStreaming, NO_USAGE, "error", 502);
       reply.code(502).send(openAiError("The model server is unavailable.", "server_error", 502));
       return;
     }
@@ -148,8 +156,10 @@ export class ProxyHandler {
       const usage = scanner.usage();
       if (usage) {
         this.recordUsage(userId, model, usage);
+        this.recordCall(userId, model, true, usage, "ok", 200);
       } else {
         req.log.warn({ userId, model }, "streamed response completed without usage data");
+        this.recordCall(userId, model, true, NO_USAGE, "ok", 200);
       }
     }
   }
@@ -179,12 +189,18 @@ export class ProxyHandler {
     const raw = Buffer.concat(chunks);
 
     if (statusCode === 200) {
+      let usage: Usage | undefined;
       try {
-        const usage = usageFromJson(JSON.parse(raw.toString()));
-        if (usage) this.recordUsage(userId, model, usage);
+        usage = usageFromJson(JSON.parse(raw.toString()));
       } catch {
         req.log.warn({ userId, model }, "200 response was not parseable JSON; usage not recorded");
       }
+      if (usage) this.recordUsage(userId, model, usage);
+      this.recordCall(userId, model, false, usage ?? NO_USAGE, "ok", 200);
+    } else {
+      // Upstream returned an error (e.g. unknown model). Nothing was generated,
+      // so nothing is billed, but the attempt is visible in history.
+      this.recordCall(userId, model, false, NO_USAGE, "error", statusCode);
     }
 
     reply.code(statusCode).header("content-type", "application/json").send(raw);
@@ -194,6 +210,29 @@ export class ProxyHandler {
   private recordUsage(userId: string, model: string, usage: Usage): void {
     this.usage.record(userId, model, usage);
     this.limiter.record(userId, usage);
+  }
+
+  /** Append one call to the user's history, with cost computed from the price sheet. */
+  private recordCall(
+    userId: string,
+    model: string,
+    streaming: boolean,
+    usage: Usage,
+    outcome: CallOutcome,
+    statusCode: number,
+  ): void {
+    const costUsd = outcome === "ok" ? this.pricing.cost(model, usage) : 0;
+    this.history.record(userId, {
+      at: Date.now(),
+      model,
+      streaming,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
+      costUsd,
+      outcome,
+      statusCode,
+    });
   }
 
   /** Pass-through for side-effect-free endpoints like GET /v1/models. */
