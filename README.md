@@ -3,7 +3,32 @@
 An OpenAI-compatible LLM proxy in TypeScript.
 It sits in front of either a local [Ollama](https://ollama.com) server or [Ollama Cloud](https://docs.ollama.com/cloud), authenticates users by API token, meters token usage per user per model, prices that usage, and enforces admin-configured usage limits.
 
-## Demo in one minute 
+## Demo
+
+### Replit app
+
+Check it out at https://replit-proxy-server--CeliaZhen.replit.app. Use `demo-alice` as an example bearer token to view Developer console, and `admin-secret` for Admin console. 
+
+You can send a request like below to see the real-time usage:
+
+```
+$ curl -sS https://replit-proxy-server--CeliaZhen.replit.app/v1/chat/completions \
+  -H "Authorization: Bearer demo-alice" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-oss:20b",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Explain why the sky is blue in two sentences."
+      }
+    ],
+    "max_tokens": 150,
+    "stream": false
+  }'
+```
+
+### Local
 
 The fastest way to see everything working, with data already populated in both dashboards:
 
