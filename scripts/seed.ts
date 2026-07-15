@@ -187,11 +187,13 @@ function main(): void {
   db.close();
 
   console.log(`\nSeeded ${USERS.length} users into ${config.dbPath}.`);
+  if (process.argv.includes("--quiet")) return;
+
   console.log("\nDeveloper dashboard  ->  http://localhost:8000/dashboard");
   console.log("Sign in with any of these API tokens:");
   for (const p of printable) console.log(`   ${p.token.padEnd(12)}  ${p.label}`);
   console.log("\nAdmin dashboard      ->  http://localhost:8000/admin/dashboard");
-  console.log(`Sign in with the admin key:  ${config.adminApiKey}`);
+  console.log("Sign in with the configured ADMIN_API_KEY (default: admin-secret).");
   console.log("\nStart the server if it isn't running:  npm start\n");
 }
 

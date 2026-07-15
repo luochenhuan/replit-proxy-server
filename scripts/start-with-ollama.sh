@@ -3,6 +3,15 @@
 # models are present, and then starts the proxy.
 set -e
 
+# This script is the explicit local mode. Ignore cloud configuration that may
+# have been inherited from a shell or synced into a development environment.
+export OLLAMA_BASE_URL=http://127.0.0.1:11434
+unset OLLAMA_API_KEY
+
+if [[ "${1:-}" == "--seed" ]]; then
+  npm run seed
+fi
+
 if ! curl -s http://127.0.0.1:11434/api/version > /dev/null 2>&1; then
   ollama serve > /tmp/ollama.log 2>&1 &
   for i in $(seq 1 30); do

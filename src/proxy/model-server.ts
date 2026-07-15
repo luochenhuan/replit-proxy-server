@@ -16,8 +16,12 @@ export interface ModelServerResponse {
 
 export class ModelServer {
   private readonly pool: Pool;
+  private readonly authHeaders: Record<string, string>;
 
   constructor(private readonly config: Config) {
+    this.authHeaders = config.serverApiKey
+      ? { authorization: `Bearer ${config.serverApiKey}` }
+      : {};
     this.pool = new Pool(config.serverBaseUrl, {
       connections: config.serverConnections,
       pipelining: 1,
@@ -37,7 +41,10 @@ export class ModelServer {
     const res = await this.pool.request({
       method: opts.method,
       path: opts.path,
-      headers: opts.headers,
+      // The upstream credential is independent of the client credential used
+      // to authenticate with this proxy. Keep it last so callers cannot
+      // replace the configured model-server authorization header.
+      headers: { ...opts.headers, ...this.authHeaders },
       body: opts.body,
       signal: opts.signal,
     });

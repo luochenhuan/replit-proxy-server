@@ -11,6 +11,9 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
+    "start:seeded": "npm run seed -- --quiet && npm start",
+    "start:local": "bash scripts/start-with-ollama.sh",
+    "start:local:seeded": "bash scripts/start-with-ollama.sh --seed",
     "seed": "tsx scripts/seed.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

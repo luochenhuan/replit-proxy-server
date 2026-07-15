@@ -1,20 +1,19 @@
 # replit-proxy-server
 
 An OpenAI-compatible LLM proxy in TypeScript.
-It sits in front of a local [Ollama](https://ollama.com) server, authenticates users by API token, meters token usage per user per model, prices that usage, and enforces admin-configured usage limits.
+It sits in front of either a local [Ollama](https://ollama.com) server or [Ollama Cloud](https://docs.ollama.com/cloud), authenticates users by API token, meters token usage per user per model, prices that usage, and enforces admin-configured usage limits.
 
 ## Demo in one minute 
 
 The fastest way to see everything working, with data already populated in both dashboards:
 
 ```bash
-# 1. Prerequisites: Node 20+, and Ollama running with the two models pulled
-ollama pull llama3.2:1b && ollama pull moondream
+# 1. Prerequisites: Node 22.19+ and Ollama installed
 
 # 2. Install, seed demo data, and start the server
 npm install
 npm run seed         # writes demo users + usage/cost/history into data/meter.db
-npm start            # proxy + dashboards on http://localhost:8000
+npm run start:local  # starts local Ollama, pulls demo models, then starts the proxy
 ```
 
 Then open the dashboards in a browser:
@@ -55,14 +54,32 @@ Notes:
 ## Quick start
 
 ```bash
-# Prerequisites: Node 20+, Ollama running with the models pulled
-ollama pull llama3.2:1b && ollama pull moondream
+# Prerequisites: Node 22.19+ and Ollama installed
 
 npm install
-npm start            # proxy listens on http://localhost:8000
+npm run start:local  # local Ollama + proxy on http://localhost:8000
 ```
 
+`npm run start:local` starts Ollama when necessary, ensures `llama3.2:1b` and `moondream` are present, clears any inherited cloud credentials, and starts the proxy.
+
+### Ollama Cloud
+
+Ollama Cloud can be used directly without installing Ollama or keeping a model server running locally.
+Create an [Ollama API key](https://ollama.com/settings/keys), then configure the model-server origin and key:
+
+```bash
+export OLLAMA_BASE_URL=https://ollama.com
+export OLLAMA_API_KEY=your-ollama-cloud-key
+npm start
+```
+
+`OLLAMA_BASE_URL` is the origin only, without `/v1`, because the proxy appends OpenAI-compatible paths such as `/v1/chat/completions`.
+The API key is sent only to the configured model server as `Authorization: Bearer <OLLAMA_API_KEY>`.
+Client tokens are used only to authenticate with this proxy and are never forwarded to Ollama Cloud.
+Use `GET /v1/models` through the proxy to see the cloud models available to the configured Ollama account.
+
 Use it exactly like the OpenAI API:
+The example below uses the local demo model; when using Ollama Cloud, replace it with a model returned by `GET /v1/models`.
 
 ```python
 from openai import OpenAI
@@ -97,7 +114,7 @@ The pages hold no secrets - they prompt for the token/key in the browser and cal
 ### Verifying
 
 ```bash
-npm test             # 35 unit/integration tests (no Ollama needed)
+npm test             # 71 unit/integration tests (no Ollama needed)
 npm run typecheck    # strict TypeScript
 npm run test:e2e     # end-to-end via the `openai` SDK against live Ollama:
                      #   chat, streaming, moondream vision, usage API, 429 enforcement
@@ -175,7 +192,8 @@ When a limit trips, the proxy returns **429** with an OpenAI-shaped error body a
 | Var | Default | Purpose |
 |---|---|---|
 | `PORT` | `8000` | Listen port |
-| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama model server URL |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama model-server origin; use `https://ollama.com` for Ollama Cloud |
+| `OLLAMA_API_KEY` | unset | Optional bearer token for an HTTPS model server; required for `ollama.com` |
 | `ADMIN_API_KEY` | `admin-secret` | Admin API bearer token |
 | `SERVER_CONNECTIONS` | `128` | Keep-alive socket pool size to the model server |
 | `LOG_LEVEL` | `info` | Pino log level |
@@ -228,6 +246,9 @@ Note that a model with no explicit entry falls back to the default (the `gpt-5.4
                           └───────────────────┴────────────────────────────┘
 ```
 
+The Ollama model server in this diagram can be local or Ollama Cloud.
+When `OLLAMA_API_KEY` is configured, the model-server module adds it only to the outbound Ollama request.
+
 ```
 src/
   config.ts                 env-driven config, parsed once at startup
@@ -237,7 +258,7 @@ src/
   app.ts                    composition root - wires everything, testable via inject()
   server.ts                 entry point + graceful shutdown
   proxy/
-    model-server.ts         undici connection pool to Ollama (the model server)
+    model-server.ts         authenticated undici connection pool to local Ollama or Ollama Cloud
     proxy-handler.ts        request lifecycle: limit-check -> forward -> observe -> record
     usage-extractor.ts      usage from JSON bodies and (incrementally) from SSE streams
   billing/
